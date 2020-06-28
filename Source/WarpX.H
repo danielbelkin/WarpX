@@ -149,6 +149,11 @@ public:
     bool update_with_rho = false;
 #endif
 
+    // Static public variable to update the electric field E (equation (13) of
+    // https://doi.org/10.1016/j.jcp.2013.03.010) using rho at times n and n+1:
+    // can be set true by the user as an input parameter
+    bool update_with_rho = false;
+
     // div E cleaning
     static int do_dive_cleaning;
 

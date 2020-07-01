@@ -149,10 +149,11 @@ public:
     bool update_with_rho = false;
 #endif
 
-    // Static public variable to update the electric field E (equation (13) of
-    // https://doi.org/10.1016/j.jcp.2013.03.010) using rho at times n and n+1:
-    // can be set true by the user as an input parameter
+#ifdef WARPX_USE_PSATD
+    // If true (overwritten by the user in the input file), the update equation
+    // for E contains both J and rho (at times n and n+1) on the right hand side
     bool update_with_rho = false;
+#endif
 
     // div E cleaning
     static int do_dive_cleaning;

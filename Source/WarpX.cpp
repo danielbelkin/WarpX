@@ -610,17 +610,17 @@ WarpX::ReadParameters ()
         pp.query("noy", noy_str);
         pp.query("noz", noz_str);
 
-        if(nox_str.compare("inf")){
+        if(nox_str == "inf"){
             nox_fft = -1;
         } else{
             pp.query("nox", nox_fft);
         }
-        if(noy_str.compare("inf")){
+        if(noy_str == "inf"){
             noy_fft = -1;
         } else{
             pp.query("noy", noy_fft);
         }
-        if(noz_str.compare("inf")){
+        if(noz_str == "inf"){
             noz_fft = -1;
         } else{
             pp.query("noz", noz_fft);

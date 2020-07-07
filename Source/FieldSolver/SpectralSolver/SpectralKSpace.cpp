@@ -10,6 +10,7 @@
 
 #include <cmath>
 
+
 using namespace amrex;
 using namespace Gpu;
 
@@ -169,6 +170,9 @@ SpectralKSpace::getSpectralShiftFactor( const DistributionMapping& dm,
  * \param nodal Whether the stencil is to be applied to a nodal or
                 staggered set of fields
  */
+
+
+
 KVectorComponent
 SpectralKSpace::getModifiedKComponent( const DistributionMapping& dm,
                                        const int i_dim,
@@ -178,8 +182,9 @@ SpectralKSpace::getModifiedKComponent( const DistributionMapping& dm,
     // Initialize an empty ManagedVector in each box
     KVectorComponent modified_k_comp(spectralspace_ba, dm);
 
-    if (n_order == -1) { // Infinite-order case
+    if(n_order == -1){
         for ( MFIter mfi(spectralspace_ba, dm); mfi.isValid(); ++mfi ){
+            Real delta_x = dx[i_dim];
             const ManagedVector<Real>& k = k_vec[i_dim][mfi];
             ManagedVector<Real>& modified_k = modified_k_comp[mfi];
 
@@ -249,37 +254,37 @@ SpectralKSpace::getModifiedKComponent( const DistributionMapping& dm,
  * `nodal` indicates whether this finite-difference approximation is
  * taken on a nodal grid or a staggered grid.
  */
-Vector<Real>
-getFonbergStencilCoefficients( const int n_order, const bool nodal )
-{
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE( n_order%2 == 0,
-                                     "n_order should be even.");
-    const int m = n_order/2;
-    Vector<Real> coefs;
-    coefs.resize( m+1 );
+ Vector<Real>
+ getFonbergStencilCoefficients( const int n_order, const bool nodal )
+ {
+     AMREX_ALWAYS_ASSERT_WITH_MESSAGE( n_order%2 == 0,
+                                       "n_order should be even.");
+     const int m = n_order/2;
+     Vector<Real> coefs;
+     coefs.resize( m+1 );
 
-    // Note: there are closed-form formula for these coefficients,
-    // but they result in an overflow when evaluated numerically.
-    // One way to avoid the overflow is to calculate the coefficients
-    // by recurrence.
+     // Note: there are closed-form formula for these coefficients,
+     // but they result in an overflow when evaluated numerically.
+     // One way to avoid the overflow is to calculate the coefficients
+     // by recurrence.
 
-    // Coefficients for nodal (a.k.a. centered) finite-difference
-    if (nodal == true) {
-       coefs[0] = -2.; // First coefficient
-       for (int n=1; n<m+1; n++){ // Get the other coefficients by recurrence
-           coefs[n] = - (m+1-n)*1./(m+n)*coefs[n-1];
-       }
-    }
-    // Coefficients for staggered finite-difference
-    else {
-       Real prod = 1.;
-       for (int k=1; k<m+1; k++){
-           prod *= (m+k)*1./(4*k);
-       }
-       coefs[0] = 4*m*prod*prod; // First coefficient
-       for (int n=1; n<m+1; n++){ // Get the other coefficients by recurrence
-           coefs[n] = - ((2*n-3)*(m+1-n))*1./((2*n-1)*(m-1+n))*coefs[n-1];
-       }
-    }
-    return coefs;
-}
+     // Coefficients for nodal (a.k.a. centered) finite-difference
+     if (nodal == true) {
+         coefs[0] = -2.; // First coefficient
+         for (int n=1; n<m+1; n++){ // Get the other coefficients by recurrence
+             coefs[n] = - (m+1-n)*1./(m+n)*coefs[n-1];
+         }
+     }
+     // Coefficients for staggered finite-difference
+     else {
+         Real prod = 1.;
+         for (int k=1; k<m+1; k++){
+             prod *= (m+k)*1./(4*k);
+         }
+         coefs[0] = 4*m*prod*prod; // First coefficient
+         for (int n=1; n<m+1; n++){ // Get the other coefficients by recurrence
+             coefs[n] = - ((2*n-3)*(m+1-n))*1./((2*n-1)*(m-1+n))*coefs[n-1];
+         }
+     }
+     return coefs;
+ }

@@ -602,9 +602,36 @@ WarpX::ReadParameters ()
         ParmParse pp("psatd");
         pp.query("periodic_single_box_fft", fft_periodic_single_box);
         pp.query("fftw_plan_measure", fftw_plan_measure);
-        pp.query("nox", nox_fft);
-        pp.query("noy", noy_fft);
-        pp.query("noz", noz_fft);
+        std::string nox_str;
+        std::string noy_str;
+        std::string noz_str;
+
+        pp.query("nox", nox_str);
+        pp.query("noy", noy_str);
+        pp.query("noz", noz_str);
+
+        if(nox_str.compare("inf")){
+            nox_fft = -1;
+        } else{
+            pp.query("nox", nox_fft);
+        }
+        if(noy_str.compare("inf")){
+            noy_fft = -1;
+        } else{
+            pp.query("noy", noy_fft);
+        }
+        if(noz_str.compare("inf")){
+            noz_fft = -1;
+        } else{
+            pp.query("noz", noz_fft);
+        }
+
+
+        if(fft_periodic_single_box){
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nox_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
+        }
         pp.query("current_correction", current_correction);
         pp.query("update_with_rho", update_with_rho);
         pp.query("v_galilean", v_galilean);

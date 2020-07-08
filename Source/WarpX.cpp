@@ -574,7 +574,7 @@ WarpX::ReadParameters ()
         pp.query("noz", noz);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox == noy and nox == noz ,
             "warpx.nox, noy and noz must be equal");
-        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 1, "warpx.nox must >= 1");
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 0, "warpx.nox must >= 1");
     }
 
     {

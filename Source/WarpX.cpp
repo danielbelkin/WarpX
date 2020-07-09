@@ -80,7 +80,7 @@ long WarpX::noy = 1;
 long WarpX::noz = 1;
 
 bool WarpX::use_fdtd_nci_corr = false;
-int  WarpX::l_lower_order_in_v = true;
+int  WarpX::l_lower_order_in_v = false; // TEMPORARY: Change default to false, just in case.
 
 bool WarpX::use_filter        = false;
 bool WarpX::serialize_ics     = false;
@@ -551,7 +551,7 @@ WarpX::ReadParameters ()
         pp.query("do_nodal", do_nodal);
         // Use same shape factors in all directions, for gathering
         // if (do_nodal) l_lower_order_in_v = false;
-        l_lower_order_in_v = false; // Always 
+        l_lower_order_in_v = false; // Always
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);

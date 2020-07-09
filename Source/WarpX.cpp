@@ -550,7 +550,8 @@ WarpX::ReadParameters ()
 
         pp.query("do_nodal", do_nodal);
         // Use same shape factors in all directions, for gathering
-        if (do_nodal) l_lower_order_in_v = false;
+        // if (do_nodal) l_lower_order_in_v = false;
+        l_lower_order_in_v = false; // Always 
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);

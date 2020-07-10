@@ -114,7 +114,7 @@ int WarpX::n_field_gather_buffer = -1;
 int WarpX::n_current_deposition_buffer = -1;
 
 int WarpX::do_nodal = false;
-std::string WarpX::stagger_mode = "yee"
+std::string WarpX::stagger_mode = "yee";
 
 #ifdef AMREX_USE_GPU
 bool WarpX::do_device_synchronize_before_profile = true;

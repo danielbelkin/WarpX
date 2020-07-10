@@ -114,6 +114,8 @@ int WarpX::n_field_gather_buffer = -1;
 int WarpX::n_current_deposition_buffer = -1;
 
 int WarpX::do_nodal = false;
+int WarpX::destagger_Jz = false;
+int WarpX::destagger_EB = false;
 
 #ifdef AMREX_USE_GPU
 bool WarpX::do_device_synchronize_before_profile = true;
@@ -548,10 +550,14 @@ WarpX::ReadParameters ()
 
         pp.query("do_dynamic_scheduling", do_dynamic_scheduling);
 
+        // check staggering options:
         pp.query("do_nodal", do_nodal);
         // Use same shape factors in all directions, for gathering
-        // if (do_nodal) l_lower_order_in_v = false;
+        if (do_nodal) l_lower_order_in_v = false;
         l_lower_order_in_v = false; // Always
+
+        pp.query("destagger_Jz", destagger_Jz);
+        pp.query("destagger_EB", destagger_EB);
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);
@@ -821,7 +827,11 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     Bz_nodal_flag = IntVect(0,1);
     jx_nodal_flag = IntVect(0,1);
     jy_nodal_flag = IntVect(1,1);
-    jz_nodal_flag = IntVect(1,0);
+    if (destagger_Jz) {
+        jz_nodal_flag = IntVect(1,1)
+    } else {
+        jz_nodal_flag = IntVect(1,0);
+    }
 #elif (AMREX_SPACEDIM == 3)
     Ex_nodal_flag = IntVect(0,1,1);
     Ey_nodal_flag = IntVect(1,0,1);
@@ -831,7 +841,11 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     Bz_nodal_flag = IntVect(0,0,1);
     jx_nodal_flag = IntVect(0,1,1);
     jy_nodal_flag = IntVect(1,0,1);
-    jz_nodal_flag = IntVect(1,1,0);
+    if (destagger_Jz) {
+        jz_nodal_flag = IntVect(1,1,1)
+    } else {
+        jz_nodal_flag = IntVect(1,1,0);
+    }
 #endif
     rho_nodal_flag = IntVect( AMREX_D_DECL(1,1,1) );
 
@@ -847,7 +861,7 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jy_nodal_flag  = IntVect::TheNodeVector();
         jz_nodal_flag  = IntVect::TheNodeVector();
         rho_nodal_flag = IntVect::TheNodeVector();
-    }
+
 #if (defined WARPX_DIM_RZ) && (defined WARPX_USE_PSATD)
     // Force cell-centered IndexType in r and z
     Ex_nodal_flag  = IntVect::TheCellVector();

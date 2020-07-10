@@ -207,6 +207,8 @@ public:
 
     // do nodal
     static int do_nodal;
+    static int destagger_Jz;
+    static int destagger_EB;
 
     std::array<const amrex::MultiFab* const, 3>
     get_array_Bfield_aux  (const int lev) const {

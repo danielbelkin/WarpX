@@ -114,8 +114,7 @@ int WarpX::n_field_gather_buffer = -1;
 int WarpX::n_current_deposition_buffer = -1;
 
 int WarpX::do_nodal = false;
-int WarpX::destagger_Jz = false;
-int WarpX::destagger_EB = false;
+std::string WarpX::stagger_mode = "yee"
 
 #ifdef AMREX_USE_GPU
 bool WarpX::do_device_synchronize_before_profile = true;
@@ -552,12 +551,15 @@ WarpX::ReadParameters ()
 
         // check staggering options:
         pp.query("do_nodal", do_nodal);
-        // Use same shape factors in all directions, for gathering
-        if (do_nodal) l_lower_order_in_v = false;
-        l_lower_order_in_v = false; // Always
+        pp.query("stagger_mode", stagger_mode);
+        if (do_nodal) stagger_mode = "nodal";
+        if (stagger_mode == "nodal") do_nodal = true; // enforce consistency
 
-        pp.query("destagger_Jz", destagger_Jz);
-        pp.query("destagger_EB", destagger_EB);
+        // Use same shape factors in all directions, for gathering
+        // if (do_nodal) l_lower_order_in_v = false;
+
+        l_lower_order_in_v = false; // TODO: Create input option controlling this.
+
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);
@@ -639,6 +641,7 @@ WarpX::ReadParameters ()
             AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
             AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
         }
+
         pp.query("current_correction", current_correction);
         pp.query("update_with_rho", update_with_rho);
         pp.query("v_galilean", v_galilean);
@@ -819,19 +822,41 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     // Set nodal flags
 #if   (AMREX_SPACEDIM == 2)
     // AMReX convention: x = first dimension, y = missing dimension, z = second dimension
-    Ex_nodal_flag = IntVect(0,1);
-    Ey_nodal_flag = IntVect(1,1);
-    Ez_nodal_flag = IntVect(1,0);
-    Bx_nodal_flag = IntVect(1,0);
-    By_nodal_flag = IntVect(0,0);
-    Bz_nodal_flag = IntVect(0,1);
-    jx_nodal_flag = IntVect(0,1);
-    jy_nodal_flag = IntVect(1,1);
-    if (destagger_Jz) {
-        jz_nodal_flag = IntVect(1,1)
-    } else {
+    if (stagger_mode == "yee"){
+        Ex_nodal_flag = IntVect(0,1);
+        Ey_nodal_flag = IntVect(1,1);
+        Ez_nodal_flag = IntVect(1,0);
+        Bx_nodal_flag = IntVect(1,0);
+        By_nodal_flag = IntVect(0,0);
+        Bz_nodal_flag = IntVect(0,1);
+        jx_nodal_flag = IntVect(0,1);
+        jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,0);
+
+    } else if (stagger_mode == "destagger_Jz"){
+        Ex_nodal_flag = IntVect(0,1);
+        Ey_nodal_flag = IntVect(1,1);
+        Ez_nodal_flag = IntVect(1,0);
+        Bx_nodal_flag = IntVect(1,0);
+        By_nodal_flag = IntVect(0,0);
+        Bz_nodal_flag = IntVect(0,1);
+        jx_nodal_flag = IntVect(0,1);
+        jy_nodal_flag = IntVect(1,1);
+        jz_nodal_flag = IntVect(1,1);
     }
+  } else if (stagger_mode == "nodal_in_z"){
+      Ex_nodal_flag = IntVect(0,1);
+      Ey_nodal_flag = IntVect(1,1);
+      Ez_nodal_flag = IntVect(1,1);
+      Bx_nodal_flag = IntVect(1,1);
+      By_nodal_flag = IntVect(0,1);
+      Bz_nodal_flag = IntVect(0,1);
+      jx_nodal_flag = IntVect(0,1);
+      jy_nodal_flag = IntVect(1,1);
+      jz_nodal_flag = IntVect(1,1);
+  } else{
+    throw "Unrecognized stagger option";
+  }
 #elif (AMREX_SPACEDIM == 3)
     Ex_nodal_flag = IntVect(0,1,1);
     Ey_nodal_flag = IntVect(1,0,1);
@@ -841,11 +866,6 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     Bz_nodal_flag = IntVect(0,0,1);
     jx_nodal_flag = IntVect(0,1,1);
     jy_nodal_flag = IntVect(1,0,1);
-    if (destagger_Jz) {
-        jz_nodal_flag = IntVect(1,1,1)
-    } else {
-        jz_nodal_flag = IntVect(1,1,0);
-    }
 #endif
     rho_nodal_flag = IntVect( AMREX_D_DECL(1,1,1) );
 

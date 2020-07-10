@@ -843,7 +843,6 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jx_nodal_flag = IntVect(0,1);
         jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,1);
-    }
   } else if (stagger_mode == "nodal_in_z"){
       Ex_nodal_flag = IntVect(0,1);
       Ey_nodal_flag = IntVect(1,1);

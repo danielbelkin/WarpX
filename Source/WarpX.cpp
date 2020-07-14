@@ -55,6 +55,8 @@ int WarpX::do_moving_window = 0;
 int WarpX::moving_window_dir = -1;
 Real WarpX::moving_window_v = std::numeric_limits<amrex::Real>::max();
 
+bool WarpX::fft_do_time_averaging = false;
+
 Real WarpX::quantum_xi_c2 = PhysConst::xi_c2;
 Real WarpX::gamma_boost = 1.;
 Real WarpX::beta_boost = 0.;
@@ -78,7 +80,6 @@ long WarpX::ncomps = 1;
 long WarpX::nox = 1;
 long WarpX::noy = 1;
 long WarpX::noz = 1;
-bool WarpX::match_shape_factors = false;
 
 bool WarpX::use_fdtd_nci_corr = false;
 int  WarpX::l_lower_order_in_v = true;
@@ -115,7 +116,6 @@ int WarpX::n_field_gather_buffer = -1;
 int WarpX::n_current_deposition_buffer = -1;
 
 int WarpX::do_nodal = false;
-std::string WarpX::stagger_mode = "yee";
 
 #ifdef AMREX_USE_GPU
 bool WarpX::do_device_synchronize_before_profile = true;
@@ -144,7 +144,6 @@ WarpX::ResetInstance ()
 WarpX::WarpX ()
 {
     m_instance = this;
-
     ReadParameters();
 
     BackwardCompatibility();
@@ -192,11 +191,16 @@ WarpX::WarpX ()
     Efield_aux.resize(nlevs_max);
     Bfield_aux.resize(nlevs_max);
 
+    Efield_avg_aux.resize(nlevs_max);
+    Bfield_avg_aux.resize(nlevs_max);
+
     F_fp.resize(nlevs_max);
     rho_fp.resize(nlevs_max);
     current_fp.resize(nlevs_max);
     Efield_fp.resize(nlevs_max);
     Bfield_fp.resize(nlevs_max);
+    Efield_avg_fp.resize(nlevs_max);
+    Bfield_avg_fp.resize(nlevs_max);
 
     current_store.resize(nlevs_max);
 
@@ -205,6 +209,8 @@ WarpX::WarpX ()
     current_cp.resize(nlevs_max);
     Efield_cp.resize(nlevs_max);
     Bfield_cp.resize(nlevs_max);
+    Efield_avg_cp.resize(nlevs_max);
+    Bfield_avg_cp.resize(nlevs_max);
 
     Efield_cax.resize(nlevs_max);
     Bfield_cax.resize(nlevs_max);
@@ -315,17 +321,6 @@ WarpX::ReadParameters ()
         ParmParse pp("amr");// Traditionally, these have prefix, amr.
 
         pp.query("restart", restart_chkfile);
-    }
-
-    {
-        ParmParse pp("interpolation");
-        pp.query("nox", nox);
-        pp.query("noy", noy);
-        pp.query("noz", noz);
-        pp.query("match_shape_factors", match_shape_factors);
-        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox == noy and nox == noz ,
-            "warpx.nox, noy and noz must be equal");
-        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 1, "warpx.nox must >= 1");
     }
 
     {
@@ -566,9 +561,9 @@ WarpX::ReadParameters ()
         pp.query("stagger_mode", stagger_mode);
         if (do_nodal) stagger_mode = "nodal";
         if (stagger_mode == "nodal") do_nodal = true; // enforce consistency
-
+        
         // Use same shape factors in all directions, for gathering
-        if (do_nodal || WarpX::match_shape_factors) l_lower_order_in_v = false;
+        if (do_nodal) l_lower_order_in_v = false;
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);
@@ -583,6 +578,16 @@ WarpX::ReadParameters ()
         do_nodal = true;
         l_lower_order_in_v = false;
 #endif
+    }
+
+    {
+        ParmParse pp("interpolation");
+        pp.query("nox", nox);
+        pp.query("noy", noy);
+        pp.query("noz", noz);
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox == noy and nox == noz ,
+            "warpx.nox, noy and noz must be equal");
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 1, "warpx.nox must >= 1");
     }
 
     {
@@ -610,42 +615,13 @@ WarpX::ReadParameters ()
         ParmParse pp("psatd");
         pp.query("periodic_single_box_fft", fft_periodic_single_box);
         pp.query("fftw_plan_measure", fftw_plan_measure);
-        std::string nox_str;
-        std::string noy_str;
-        std::string noz_str;
-
-        pp.query("nox", nox_str);
-        pp.query("noy", noy_str);
-        pp.query("noz", noz_str);
-
-        if(nox_str == "inf"){
-            nox_fft = -1;
-        } else{
-            pp.query("nox", nox_fft);
-        }
-        if(noy_str == "inf"){
-            noy_fft = -1;
-        } else{
-            pp.query("noy", noy_fft);
-        }
-        if(noz_str == "inf"){
-            noz_fft = -1;
-        } else{
-            pp.query("noz", noz_fft);
-        }
-
-
-        if (!fft_periodic_single_box) {
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nox_fft > 0, "PSATD order must be finite unless psatd.periodic_single_box_fft is used");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless psatd.periodic_single_box_fft is used");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless psatd.periodic_single_box_fft is used");
-        }
-
+        pp.query("nox", nox_fft);
+        pp.query("noy", noy_fft);
+        pp.query("noz", noz_fft);
         pp.query("current_correction", current_correction);
         pp.query("update_with_rho", update_with_rho);
         pp.query("v_galilean", v_galilean);
         pp.query("do_time_averaging", fft_do_time_averaging);
-
       // Scale the velocity by the speed of light
         for (int i=0; i<3; i++) v_galilean[i] *= PhysConst::c;
     }
@@ -823,85 +799,41 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     // Set nodal flags
 #if   (AMREX_SPACEDIM == 2)
     // AMReX convention: x = first dimension, y = missing dimension, z = second dimension
-    if (stagger_mode == "yee"){
-        Ex_nodal_flag = IntVect(0,1);
-        Ey_nodal_flag = IntVect(1,1);
-        Ez_nodal_flag = IntVect(1,0);
-        Bx_nodal_flag = IntVect(1,0);
-        By_nodal_flag = IntVect(0,0);
-        Bz_nodal_flag = IntVect(0,1);
-        jx_nodal_flag = IntVect(0,1);
-        jy_nodal_flag = IntVect(1,1);
-        jz_nodal_flag = IntVect(1,0);
-        rho_nodal_flag = IntVect(1,1);
-
-    } else if (stagger_mode == "nodal") {
-          Ex_nodal_flag  = IntVect::TheNodeVector();
-          Ey_nodal_flag  = IntVect::TheNodeVector();
-          Ez_nodal_flag  = IntVect::TheNodeVector();
-          Bx_nodal_flag  = IntVect::TheNodeVector();
-          By_nodal_flag  = IntVect::TheNodeVector();
-          Bz_nodal_flag  = IntVect::TheNodeVector();
-          jx_nodal_flag  = IntVect::TheNodeVector();
-          jy_nodal_flag  = IntVect::TheNodeVector();
-          jz_nodal_flag  = IntVect::TheNodeVector();
-          rho_nodal_flag = IntVect::TheNodeVector();
-
-    } else if (stagger_mode == "destagger_Jz"){
-        Ex_nodal_flag = IntVect(0,1);
-        Ey_nodal_flag = IntVect(1,1);
-        Ez_nodal_flag = IntVect(1,0);
-        Bx_nodal_flag = IntVect(1,0);
-        By_nodal_flag = IntVect(0,0);
-        Bz_nodal_flag = IntVect(0,1);
-        jx_nodal_flag = IntVect(0,1);
-        jy_nodal_flag = IntVect(1,1);
-        jz_nodal_flag = IntVect(1,1);
-        rho_nodal_flag = IntVect(1,1); // might change
-
-  } else if (stagger_mode == "nodal_in_z"){
-        Ex_nodal_flag = IntVect(0,1);
-        Ey_nodal_flag = IntVect(1,1);
-        Ez_nodal_flag = IntVect(1,1);
-        Bx_nodal_flag = IntVect(1,1);
-        By_nodal_flag = IntVect(0,1);
-        Bz_nodal_flag = IntVect(0,1);
-        jx_nodal_flag = IntVect(0,1);
-        jy_nodal_flag = IntVect(1,1);
-        jz_nodal_flag = IntVect(1,1);
-        rho_nodal_flag = IntVect(1,1); // might change
-  } else{
-    throw "Unrecognized stagger option";
-  }
+    Ex_nodal_flag = IntVect(0,1);
+    Ey_nodal_flag = IntVect(1,1);
+    Ez_nodal_flag = IntVect(1,0);
+    Bx_nodal_flag = IntVect(1,0);
+    By_nodal_flag = IntVect(0,0);
+    Bz_nodal_flag = IntVect(0,1);
+    jx_nodal_flag = IntVect(0,1);
+    jy_nodal_flag = IntVect(1,1);
+    jz_nodal_flag = IntVect(1,0);
 #elif (AMREX_SPACEDIM == 3)
-  if (stagger_mode == "yee"){
-      Ex_nodal_flag = IntVect(0,1,1);
-      Ey_nodal_flag = IntVect(1,0,1);
-      Ez_nodal_flag = IntVect(1,1,0);
-      Bx_nodal_flag = IntVect(1,0,0);
-      By_nodal_flag = IntVect(0,1,0);
-      Bz_nodal_flag = IntVect(0,0,1);
-      jx_nodal_flag = IntVect(0,1,1);
-      jy_nodal_flag = IntVect(1,0,1);
-      jz_nodal_flag = IntVect(1,1,0);
-      rho_nodal_flag = IntVect(1,1,1);
-
-  } else if (stagger_mode == "nodal"){
-      Ex_nodal_flag  = IntVect::TheNodeVector();
-      Ey_nodal_flag  = IntVect::TheNodeVector();
-      Ez_nodal_flag  = IntVect::TheNodeVector();
-      Bx_nodal_flag  = IntVect::TheNodeVector();
-      By_nodal_flag  = IntVect::TheNodeVector();
-      Bz_nodal_flag  = IntVect::TheNodeVector();
-      jx_nodal_flag  = IntVect::TheNodeVector();
-      jy_nodal_flag  = IntVect::TheNodeVector();
-      jz_nodal_flag  = IntVect::TheNodeVector();
-      rho_nodal_flag = IntVect::TheNodeVector();
-  } else {
-    throw "Unrecognized stagger option";
-  }
+    Ex_nodal_flag = IntVect(0,1,1);
+    Ey_nodal_flag = IntVect(1,0,1);
+    Ez_nodal_flag = IntVect(1,1,0);
+    Bx_nodal_flag = IntVect(1,0,0);
+    By_nodal_flag = IntVect(0,1,0);
+    Bz_nodal_flag = IntVect(0,0,1);
+    jx_nodal_flag = IntVect(0,1,1);
+    jy_nodal_flag = IntVect(1,0,1);
+    jz_nodal_flag = IntVect(1,1,0);
 #endif
+    rho_nodal_flag = IntVect( AMREX_D_DECL(1,1,1) );
 
+    // Overwrite nodal flags if necessary
+    if (do_nodal) {
+        Ex_nodal_flag  = IntVect::TheNodeVector();
+        Ey_nodal_flag  = IntVect::TheNodeVector();
+        Ez_nodal_flag  = IntVect::TheNodeVector();
+        Bx_nodal_flag  = IntVect::TheNodeVector();
+        By_nodal_flag  = IntVect::TheNodeVector();
+        Bz_nodal_flag  = IntVect::TheNodeVector();
+        jx_nodal_flag  = IntVect::TheNodeVector();
+        jy_nodal_flag  = IntVect::TheNodeVector();
+        jz_nodal_flag  = IntVect::TheNodeVector();
+        rho_nodal_flag = IntVect::TheNodeVector();
+    }
 #if (defined WARPX_DIM_RZ) && (defined WARPX_USE_PSATD)
     // Force cell-centered IndexType in r and z
     Ex_nodal_flag  = IntVect::TheCellVector();
@@ -941,6 +873,15 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     current_fp[lev][0].reset( new MultiFab(amrex::convert(ba,jx_nodal_flag),dm,ncomps,ngJ));
     current_fp[lev][1].reset( new MultiFab(amrex::convert(ba,jy_nodal_flag),dm,ncomps,ngJ));
     current_fp[lev][2].reset( new MultiFab(amrex::convert(ba,jz_nodal_flag),dm,ncomps,ngJ));
+
+
+    Bfield_avg_fp[lev][0].reset( new MultiFab(amrex::convert(ba,Bx_nodal_flag),dm,ncomps,ngE));
+    Bfield_avg_fp[lev][1].reset( new MultiFab(amrex::convert(ba,By_nodal_flag),dm,ncomps,ngE));
+    Bfield_avg_fp[lev][2].reset( new MultiFab(amrex::convert(ba,Bz_nodal_flag),dm,ncomps,ngE));
+
+    Efield_avg_fp[lev][0].reset( new MultiFab(amrex::convert(ba,Ex_nodal_flag),dm,ncomps,ngE));
+    Efield_avg_fp[lev][1].reset( new MultiFab(amrex::convert(ba,Ey_nodal_flag),dm,ncomps,ngE));
+    Efield_avg_fp[lev][2].reset( new MultiFab(amrex::convert(ba,Ez_nodal_flag),dm,ncomps,ngE));
 
     if (do_dive_cleaning || (plot_rho && do_back_transformed_diagnostics))
     {
@@ -989,7 +930,7 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     bool const pml=false;
     spectral_solver_fp[lev].reset( new SpectralSolver( realspace_ba, dm,
         nox_fft, noy_fft, noz_fft, do_nodal, v_galilean, dx_vect, dt[lev],
-        pml, fft_periodic_single_box, update_with_rho ) );
+        pml, fft_periodic_single_box, update_with_rho, fft_do_time_averaging ) );
 #   endif
 #endif
     m_fdtd_solver_fp[lev].reset(
@@ -1014,6 +955,9 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         for (int idir = 0; idir < 3; ++idir) {
             Efield_aux[lev][idir].reset(new MultiFab(*Efield_fp[lev][idir], amrex::make_alias, 0, ncomps));
             Bfield_aux[lev][idir].reset(new MultiFab(*Bfield_fp[lev][idir], amrex::make_alias, 0, ncomps));
+
+            Efield_avg_aux[lev][idir].reset(new MultiFab(*Efield_avg_fp[lev][idir], amrex::make_alias, 0, ncomps));
+            Bfield_avg_aux[lev][idir].reset(new MultiFab(*Bfield_avg_fp[lev][idir], amrex::make_alias, 0, ncomps));
         }
     }
     else
@@ -1025,6 +969,16 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         Efield_aux[lev][0].reset( new MultiFab(amrex::convert(ba,Ex_nodal_flag),dm,ncomps,ngE));
         Efield_aux[lev][1].reset( new MultiFab(amrex::convert(ba,Ey_nodal_flag),dm,ncomps,ngE));
         Efield_aux[lev][2].reset( new MultiFab(amrex::convert(ba,Ez_nodal_flag),dm,ncomps,ngE));
+
+
+        Bfield_avg_aux[lev][0].reset( new MultiFab(amrex::convert(ba,Bx_nodal_flag),dm,ncomps,ngE));
+        Bfield_avg_aux[lev][1].reset( new MultiFab(amrex::convert(ba,By_nodal_flag),dm,ncomps,ngE));
+        Bfield_avg_aux[lev][2].reset( new MultiFab(amrex::convert(ba,Bz_nodal_flag),dm,ncomps,ngE));
+
+        Efield_avg_aux[lev][0].reset( new MultiFab(amrex::convert(ba,Ex_nodal_flag),dm,ncomps,ngE));
+        Efield_avg_aux[lev][1].reset( new MultiFab(amrex::convert(ba,Ey_nodal_flag),dm,ncomps,ngE));
+        Efield_avg_aux[lev][2].reset( new MultiFab(amrex::convert(ba,Ez_nodal_flag),dm,ncomps,ngE));
+
     }
 
     //
@@ -1045,6 +999,16 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         Efield_cp[lev][0].reset( new MultiFab(amrex::convert(cba,Ex_nodal_flag),dm,ncomps,ngE));
         Efield_cp[lev][1].reset( new MultiFab(amrex::convert(cba,Ey_nodal_flag),dm,ncomps,ngE));
         Efield_cp[lev][2].reset( new MultiFab(amrex::convert(cba,Ez_nodal_flag),dm,ncomps,ngE));
+
+        // Create the MultiFabs for B_avg
+        Bfield_avg_cp[lev][0].reset( new MultiFab(amrex::convert(cba,Bx_nodal_flag),dm,ncomps,ngE));
+        Bfield_avg_cp[lev][1].reset( new MultiFab(amrex::convert(cba,By_nodal_flag),dm,ncomps,ngE));
+        Bfield_avg_cp[lev][2].reset( new MultiFab(amrex::convert(cba,Bz_nodal_flag),dm,ncomps,ngE));
+
+        // Create the MultiFabs for E_avg
+        Efield_avg_cp[lev][0].reset( new MultiFab(amrex::convert(cba,Ex_nodal_flag),dm,ncomps,ngE));
+        Efield_avg_cp[lev][1].reset( new MultiFab(amrex::convert(cba,Ey_nodal_flag),dm,ncomps,ngE));
+        Efield_avg_cp[lev][2].reset( new MultiFab(amrex::convert(cba,Ez_nodal_flag),dm,ncomps,ngE));
 
         // Create the MultiFabs for the current
         current_cp[lev][0].reset( new MultiFab(amrex::convert(cba,jx_nodal_flag),dm,ncomps,ngJ));
@@ -1081,7 +1045,7 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         realspace_ba.grow(ngE); // add guard cells
         spectral_solver_cp[lev].reset( new SpectralSolver( realspace_ba, dm,
             nox_fft, noy_fft, noz_fft, do_nodal, v_galilean, cdx_vect, dt[lev],
-            pml, fft_periodic_single_box, update_with_rho ) );
+            pml, fft_periodic_single_box, update_with_rho, fft_do_time_averaging ) );
 #   endif
 #endif
         m_fdtd_solver_cp[lev].reset(

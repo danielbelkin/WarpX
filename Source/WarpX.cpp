@@ -637,9 +637,9 @@ WarpX::ReadParameters ()
 
 
         if(!fft_periodic_single_box){
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nox_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless using periodic_single_box_fft");
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nox_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
         }
 
         pp.query("current_correction", current_correction);
@@ -843,16 +843,17 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jx_nodal_flag = IntVect(0,1);
         jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,1);
+
   } else if (stagger_mode == "nodal_in_z"){
-      Ex_nodal_flag = IntVect(0,1);
-      Ey_nodal_flag = IntVect(1,1);
-      Ez_nodal_flag = IntVect(1,1);
-      Bx_nodal_flag = IntVect(1,1);
-      By_nodal_flag = IntVect(0,1);
-      Bz_nodal_flag = IntVect(0,1);
-      jx_nodal_flag = IntVect(0,1);
-      jy_nodal_flag = IntVect(1,1);
-      jz_nodal_flag = IntVect(1,1);
+        Ex_nodal_flag = IntVect(0,1);
+        Ey_nodal_flag = IntVect(1,1);
+        Ez_nodal_flag = IntVect(1,1);
+        Bx_nodal_flag = IntVect(1,1);
+        By_nodal_flag = IntVect(0,1);
+        Bz_nodal_flag = IntVect(0,1);
+        jx_nodal_flag = IntVect(0,1);
+        jy_nodal_flag = IntVect(1,1);
+        jz_nodal_flag = IntVect(1,1);
   } else{
     throw "Unrecognized stagger option";
   }

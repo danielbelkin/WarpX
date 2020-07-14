@@ -568,7 +568,7 @@ WarpX::ReadParameters ()
         if (stagger_mode == "nodal") do_nodal = true; // enforce consistency
 
         // Use same shape factors in all directions, for gathering
-        if (do_nodal || match_shape_factors) l_lower_order_in_v = false;
+        if (do_nodal || WarpX::match_shape_factors) l_lower_order_in_v = false;
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);

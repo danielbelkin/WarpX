@@ -80,7 +80,7 @@ long WarpX::noy = 1;
 long WarpX::noz = 1;
 
 bool WarpX::use_fdtd_nci_corr = false;
-int  WarpX::l_lower_order_in_v = false; // TEMPORARY: Change default to false, just in case.
+int  WarpX::l_lower_order_in_v = true;
 
 bool WarpX::use_filter        = false;
 bool WarpX::serialize_ics     = false;
@@ -556,10 +556,7 @@ WarpX::ReadParameters ()
         if (stagger_mode == "nodal") do_nodal = true; // enforce consistency
 
         // Use same shape factors in all directions, for gathering
-        // if (do_nodal) l_lower_order_in_v = false;
-
-        l_lower_order_in_v = false; // TODO: Create input option controlling this.
-
+        if (do_nodal) l_lower_order_in_v = false;
 
         // Only needs to be set with WARPX_DIM_RZ, otherwise defaults to 1
         pp.query("n_rz_azimuthal_modes", n_rz_azimuthal_modes);
@@ -583,7 +580,7 @@ WarpX::ReadParameters ()
         pp.query("noz", noz);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox == noy and nox == noz ,
             "warpx.nox, noy and noz must be equal");
-        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 0, "warpx.nox must >= 1");
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE( nox >= 1, "warpx.nox must >= 1");
     }
 
     {
@@ -611,37 +608,9 @@ WarpX::ReadParameters ()
         ParmParse pp("psatd");
         pp.query("periodic_single_box_fft", fft_periodic_single_box);
         pp.query("fftw_plan_measure", fftw_plan_measure);
-        std::string nox_str;
-        std::string noy_str;
-        std::string noz_str;
-
-        pp.query("nox", nox_str);
-        pp.query("noy", noy_str);
-        pp.query("noz", noz_str);
-
-        if(nox_str == "inf"){
-            nox_fft = -1;
-        } else{
-            pp.query("nox", nox_fft);
-        }
-        if(noy_str == "inf"){
-            noy_fft = -1;
-        } else{
-            pp.query("noy", noy_fft);
-        }
-        if(noz_str == "inf"){
-            noz_fft = -1;
-        } else{
-            pp.query("noz", noz_fft);
-        }
-
-
-        if(!fft_periodic_single_box){
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nox_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noy_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
-            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(noz_fft > 0, "PSATD order must be finite unless periodic_single_box_fft is used");
-        }
-
+        pp.query("nox", nox_fft);
+        pp.query("noy", noy_fft);
+        pp.query("noz", noz_fft);
         pp.query("current_correction", current_correction);
         pp.query("update_with_rho", update_with_rho);
         pp.query("v_galilean", v_galilean);
@@ -832,6 +801,19 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jx_nodal_flag = IntVect(0,1);
         jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,0);
+        rho_nodal_flag = IntVect(1,1);
+
+    } else if (stagger_mode == "nodal") {
+          Ex_nodal_flag  = IntVect::TheNodeVector();
+          Ey_nodal_flag  = IntVect::TheNodeVector();
+          Ez_nodal_flag  = IntVect::TheNodeVector();
+          Bx_nodal_flag  = IntVect::TheNodeVector();
+          By_nodal_flag  = IntVect::TheNodeVector();
+          Bz_nodal_flag  = IntVect::TheNodeVector();
+          jx_nodal_flag  = IntVect::TheNodeVector();
+          jy_nodal_flag  = IntVect::TheNodeVector();
+          jz_nodal_flag  = IntVect::TheNodeVector();
+          rho_nodal_flag = IntVect::TheNodeVector();
 
     } else if (stagger_mode == "destagger_Jz"){
         Ex_nodal_flag = IntVect(0,1);
@@ -843,6 +825,7 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jx_nodal_flag = IntVect(0,1);
         jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,1);
+        rho_nodal_flag = IntVect(1,1); // might change
 
   } else if (stagger_mode == "nodal_in_z"){
         Ex_nodal_flag = IntVect(0,1);
@@ -854,35 +837,38 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
         jx_nodal_flag = IntVect(0,1);
         jy_nodal_flag = IntVect(1,1);
         jz_nodal_flag = IntVect(1,1);
+        rho_nodal_flag = IntVect(1,1); // might change
   } else{
     throw "Unrecognized stagger option";
   }
 #elif (AMREX_SPACEDIM == 3)
-    Ex_nodal_flag = IntVect(0,1,1);
-    Ey_nodal_flag = IntVect(1,0,1);
-    Ez_nodal_flag = IntVect(1,1,0);
-    Bx_nodal_flag = IntVect(1,0,0);
-    By_nodal_flag = IntVect(0,1,0);
-    Bz_nodal_flag = IntVect(0,0,1);
-    jx_nodal_flag = IntVect(0,1,1);
-    jy_nodal_flag = IntVect(1,0,1);
-    // WHY IS jz_nodal_flag not here??
-#endif
-    rho_nodal_flag = IntVect( AMREX_D_DECL(1,1,1) );
+  if (stagger_mode == "yee"){
+      Ex_nodal_flag = IntVect(0,1,1);
+      Ey_nodal_flag = IntVect(1,0,1);
+      Ez_nodal_flag = IntVect(1,1,0);
+      Bx_nodal_flag = IntVect(1,0,0);
+      By_nodal_flag = IntVect(0,1,0);
+      Bz_nodal_flag = IntVect(0,0,1);
+      jx_nodal_flag = IntVect(0,1,1);
+      jy_nodal_flag = IntVect(1,0,1);
+      jz_nodal_flag = IntVect(1,1,0);
+      rho_nodal_flag = IntVect(1,1,1);
 
-    // Overwrite nodal flags if necessary
-    if (do_nodal) {
-        Ex_nodal_flag  = IntVect::TheNodeVector();
-        Ey_nodal_flag  = IntVect::TheNodeVector();
-        Ez_nodal_flag  = IntVect::TheNodeVector();
-        Bx_nodal_flag  = IntVect::TheNodeVector();
-        By_nodal_flag  = IntVect::TheNodeVector();
-        Bz_nodal_flag  = IntVect::TheNodeVector();
-        jx_nodal_flag  = IntVect::TheNodeVector();
-        jy_nodal_flag  = IntVect::TheNodeVector();
-        jz_nodal_flag  = IntVect::TheNodeVector();
-        rho_nodal_flag = IntVect::TheNodeVector();
-    }
+  } else if (stagger_mode == "nodal"){
+      Ex_nodal_flag  = IntVect::TheNodeVector();
+      Ey_nodal_flag  = IntVect::TheNodeVector();
+      Ez_nodal_flag  = IntVect::TheNodeVector();
+      Bx_nodal_flag  = IntVect::TheNodeVector();
+      By_nodal_flag  = IntVect::TheNodeVector();
+      Bz_nodal_flag  = IntVect::TheNodeVector();
+      jx_nodal_flag  = IntVect::TheNodeVector();
+      jy_nodal_flag  = IntVect::TheNodeVector();
+      jz_nodal_flag  = IntVect::TheNodeVector();
+      rho_nodal_flag = IntVect::TheNodeVector();
+  } else {
+    throw "Unrecognized stagger option";
+  }
+#endif
 
 #if (defined WARPX_DIM_RZ) && (defined WARPX_USE_PSATD)
     // Force cell-centered IndexType in r and z
